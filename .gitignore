@@ -1,0 +1,18 @@
+# Personal data: never publish (window titles, app usage, boot times)
+activity.db
+activity.db-*
+activity.json.bak
+activity.log
+error.log
+
+# Per-user settings (goal, update_url, ignore lists)
+config.json
+
+# Build and runtime output
+dist/
+previous/
+.venv/
+__pycache__/
+*.pyc
+*.tmp
+update.zip

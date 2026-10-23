@@ -1,0 +1,166 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AT7 Monitor</title>
+<style>
+:root{--bg:#fafafa;--fg:#1c1c1c;--mut:#767676;--line:#e4e4e4;--acc:#2f9e44;--afk:#999;--pc:#4263eb}
+@media(prefers-color-scheme:dark){:root{--bg:#161616;--fg:#e6e6e6;--mut:#8a8a8a;--line:#2c2c2c;--acc:#4cd964;--afk:#777;--pc:#748ffc}}
+*{box-sizing:border-box}
+body{margin:0 auto;max-width:760px;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,Segoe UI,sans-serif}
+header{display:flex;gap:8px;align-items:center;margin-bottom:20px}
+button,input{font:inherit;color:inherit;background:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:24px}
+.stats div{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.stats b{display:block;font-size:18px;font-weight:600}
+.stats span,.mut{color:var(--mut);font-size:12px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:24px 0 8px;cursor:pointer;user-select:none}
+h2::before{content:"\25BE";display:inline-block;width:14px}h2.closed::before{content:"\25B8"}h2.closed+div{display:none}
+#upd{display:flex;flex-wrap:wrap;align-items:center;gap:10px;border:1px solid var(--acc);border-radius:8px;padding:8px 12px;margin-bottom:16px}#upd[hidden]{display:none}
+.bar{display:flex;align-items:center;gap:10px;margin:4px 0}
+.bar .n{width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .t{flex:1;height:8px;background:var(--line);border-radius:4px}
+.bar .t i{display:block;height:100%;background:var(--acc);border-radius:4px}
+.bar .d{min-width:70px;white-space:nowrap;text-align:right;color:var(--mut)}
+.row{display:flex;gap:12px;padding:6px 0;border-top:1px solid var(--line)}
+.row .tm{width:96px;color:var(--mut);flex:none;font-variant-numeric:tabular-nums}
+.row .b{flex:1;min-width:0}
+.afk .b,.afk .tm{color:var(--afk)}.pc .b{color:var(--pc)}
+details.app summary.bar{display:flex}details.app summary:hover .n,details.app.on .n{color:var(--acc)}
+.lnk{display:inline-block;margin:4px 0 6px 14px;font-size:12px;color:var(--acc);cursor:pointer}.more{margin-top:8px;font-size:12px}
+#tl[data-empty='1']::after{content:'No activity recorded for this day';color:var(--mut)}
+details summary{cursor:pointer;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"\25B8";display:inline-block;width:14px;color:var(--mut);transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+details[open] summary{margin-bottom:4px}
+.ti{display:flex;justify-content:space-between;gap:12px;color:var(--mut);font-size:12px;padding:1px 0 1px 12px}
+.ti span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+<header>
+  <b style="margin-right:auto">AT7 Monitor</b><button id="prev">&larr;</button><input type="date" id="day"><button id="next">&rarr;</button><button id="today">Today</button>
+</header>
+<div id="upd" hidden></div>
+<div id="goal"></div>
+<div class="stats" id="stats"></div>
+<h2 data-sec="apps">Apps</h2><div id="apps"></div>
+<h2 data-sec="timeline">Timeline</h2><div id="tl"></div>
+<script>
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const hhmm = t => t ? new Date(t * 1000).toTimeString().slice(0, 5) : "--:--";
+const dur = s => s >= 3600 ? `${Math.floor(s / 3600)}h ${pad(Math.floor(s % 3600 / 60))}m ${pad(Math.floor(s % 60))}s` : s >= 60 ? `${Math.floor(s / 60)}m ${pad(Math.floor(s % 60))}s` : `${Math.floor(s)}s`;
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };  // textContent only: window titles are untrusted
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+let cur = iso(new Date());
+
+function row(cls, time, body) { const r = el("div", "row " + cls), t = el("div", "tm", time), b = el("div", "b"); b.append(body); r.append(t, b); return r; }
+
+let full = null, lastKey = "", busy = false, filter = null, showAll = false;  // full = last complete payload
+
+function renderTotals(d) {
+  const s = d.summary, boots = d.power.filter(p => p[1] === "BOOT"), offs = d.power.filter(p => /SHUTDOWN|POWER LOSS/.test(p[1]));
+  const pct = Math.min(100, s.active / s.goal * 100), g = el("div", "bar"), t = el("div", "t"), i = el("i");
+  i.style.width = pct + "%"; t.append(i);
+  g.append(el("div", "n", `Active ${dur(s.active)}`), t, el("div", "d", `of ${dur(s.goal)} · ${Math.round(pct)}%`));
+  $("goal").replaceChildren(g);
+  $("stats").replaceChildren(...[["Active", dur(s.active)], ["AFK", dur(s.afk)], ["Started", hhmm(s.start)], ["Last activity", hhmm(s.last)],
+    ["Laptop on", hhmm(boots[0]?.[0])], ["Shutdown", hhmm(offs.at(-1)?.[0])]]
+    .map(([k, v]) => { const x = el("div"); x.append(el("b", "", v), el("span", "", k)); return x; }));
+}
+
+function renderLists(d) {  // heavy part: only runs when something changed, at most every 10s while live
+  const open = new Set([...document.querySelectorAll("#tl details[open]")].map(x => x.dataset.k));  // keep expanded blocks
+  const openApp = [...document.querySelectorAll("#apps details[open]")].map(x => x.dataset.k)[0];
+  const max = d.apps[0]?.[1] || 1, shown = showAll ? d.apps : d.apps.slice(0, 8);
+  const more = d.apps.length > 8 ? [Object.assign(el("button", "more", showAll ? "Show fewer apps" : `Show all ${d.apps.length} apps`),
+    { onclick: () => { showAll = !showAll; renderLists(full); } })] : [];
+  $("apps").replaceChildren(...shown.map(([n, v, titles]) => {  // one expandable row per app: click to see the windows/pages used in it
+    const det = el("details", "app" + (n === filter ? " on" : "")), sum = el("summary", "bar"), t = el("div", "t"), i = el("i");
+    i.style.width = v / max * 100 + "%"; t.append(i); sum.append(el("div", "n", n), t, el("div", "d", dur(v)));
+    det.dataset.k = n; det.open = n === openApp;
+    const lnk = el("a", "lnk", n === filter ? "Clear timeline filter" : "Show only this app in the timeline");
+    lnk.onclick = () => { filter = n === filter ? null : n; renderLists(full); };
+    det.append(sum, ...titles.map(([ti, s]) => { const x = el("div", "ti"); x.append(el("span", "", ti || "(no title)"), el("span", "", dur(s))); return x; }), lnk);
+    return det;
+  }), ...more);
+  const list = d.blocks.filter(b => !filter || b.app === filter).map(b => ({ t: b.start, b }));
+  if (!filter) {
+    d.spans.forEach(([a, b]) => list.push({ t: a, afk: [a, b] }));
+    d.power.forEach(([t, k]) => list.push({ t, pc: k }));
+    d.events.forEach(([t, m]) => list.push({ t, ev: m }));
+  }
+  list.sort((x, y) => x.t - y.t);
+  $("tl").replaceChildren(...list.map(i => {
+    if (i.afk) return row("afk", `${hhmm(i.afk[0])}–${hhmm(i.afk[1])}`, el("span", "", `AFK · ${dur(i.afk[1] - i.afk[0])}`));
+    if (i.pc) return row("pc", hhmm(i.t), el("span", "", "Laptop: " + i.pc.toLowerCase()));
+    if (i.ev) return row("pc", hhmm(i.t), el("span", "", i.ev === "START" ? "Work started" : i.ev));
+    const b = i.b, det = el("details"), sum = el("summary"), top = b.titles[0]?.[0];
+    det.dataset.k = b.start; det.open = open.has(String(b.start));
+    sum.append(el("b", "", b.app), el("span", "mut", `  ${dur(b.active)} active` + (top ? " · " + top.slice(0, 70) : "")));
+    det.append(sum, ...b.titles.map(([t, v]) => { const x = el("div", "ti"); x.append(el("span", "", t || "(no title)"), el("span", "", dur(v))); return x; }));
+    return row("", `${hhmm(b.start)}–${hhmm(b.stop)}`, det);
+  }));
+  $("tl").dataset.empty = list.length ? "" : "1";
+}
+
+// lite = tiny totals-only request (every second); full = apps + timeline (first load, day change, then every 10s while live)
+async function load(wantFull) {
+  if (busy) return;
+  busy = true;
+  $("day").value = cur;
+  let d;
+  try { d = await (await fetch(`/api/day?d=${cur}${wantFull ? "" : "&lite=1"}`)).json(); }
+  catch { $("goal").replaceChildren(el("div", "mut", "Monitor not reachable - is it running?")); return; }
+  finally { busy = false; }
+  renderTotals(d);
+  if (wantFull) {
+    const key = JSON.stringify([d.blocks, d.apps, d.spans, d.power, d.events]);
+    full = d;
+    if (key !== lastKey) { lastKey = key; renderLists(d); }
+  }
+}
+
+const go = n => { cur = n; filter = null; lastKey = ""; load(true); };
+const shift = n => { const d = new Date(cur + "T12:00"); d.setDate(d.getDate() + n); go(iso(d)); };
+$("prev").onclick = () => shift(-1); $("next").onclick = () => shift(1);
+$("today").onclick = () => go(iso(new Date()));
+$("day").onchange = e => go(e.target.value || cur);
+// accordion: opening an app or timeline block closes the others in its list (toggle doesn't bubble, so listen in the capture phase)
+for (const id of ["tl", "apps"]) $(id).addEventListener("toggle", e => {
+  if (e.target.open) document.querySelectorAll(`#${id} details[open]`).forEach(x => { if (x !== e.target) x.open = false; });
+}, true);
+// collapsible Apps / Timeline sections; remembered per browser
+const pref = { get(k) { try { return localStorage.getItem("at7." + k) === "1"; } catch { return false; } }, set(k, v) { try { localStorage.setItem("at7." + k, v ? "1" : "0"); } catch {} } };
+document.querySelectorAll("h2[data-sec]").forEach(h => {
+  h.classList.toggle("closed", pref.get(h.dataset.sec));
+  h.onclick = () => pref.set(h.dataset.sec, h.classList.toggle("closed"));
+});
+
+// update banner (shown only when the monitor has update_url configured and a newer version is published)
+let waiting = false;
+async function checkUpdate() {
+  let u; try { u = await (await fetch("/api/update")).json(); } catch { return; }
+  const b = $("upd");
+  if (u.busy) { b.hidden = false; b.replaceChildren(el("span", "", "Installing the update... the app restarts and this page reloads by itself.")); waitForRestart(u.current); return; }
+  if (!u.latest) { b.hidden = !u.error; if (u.error) b.replaceChildren(el("span", "mut", "Update failed: " + u.error)); return; }
+  const btn = el("button", "", "Update now");
+  btn.onclick = async () => { btn.disabled = true; await fetch("/api/update/install", { method: "POST", headers: { "X-AT7": "1" } }); checkUpdate(); };
+  b.hidden = false;
+  b.replaceChildren(el("b", "", `Update available: v${u.latest.version}`), el("span", "mut", `you have v${u.current}` + (u.latest.notes ? " · " + u.latest.notes : "")), btn);
+}
+function waitForRestart(old) {
+  if (waiting) return; waiting = true;
+  const t = setInterval(async () => {
+    try { const u = await (await fetch("/api/update")).json(); if (u.current !== old) { clearInterval(t); location.reload(); } } catch {}
+  }, 2000);
+}
+checkUpdate(); setInterval(checkUpdate, 60000);
+let ticks = 0;
+load(true);
+setInterval(() => {
+  if (document.hidden || cur !== iso(new Date())) return;  // nothing to refresh for past days or background tabs
+  ticks++;
+  load(ticks % 10 === 0);
+}, 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(true); });
+</script>
