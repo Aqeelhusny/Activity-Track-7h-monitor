@@ -1,0 +1,59 @@
+name: Release
+
+# Every merge to main that changes the shipped app files: pick the next version, bump core.py, run the tests,
+# build dist/AT7-Monitor.zip + dist/version.json and publish a GitHub release (colleagues' apps then offer the update).
+on:
+  push:
+    branches: [main]
+    paths: [monitor.py, core.py, updater.py, ui.html, install.ps1, install.bat, uninstall.ps1, uninstall.bat, requirements.txt]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags + history are needed to pick the next version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pick version
+        id: v
+        shell: bash
+        run: bash .github/scripts/next-version.sh >> "$GITHUB_OUTPUT"
+
+      - name: Write version into core.py and commit it
+        shell: bash
+        run: |
+          sed -i "s/^VERSION = \".*\"/VERSION = \"${{ steps.v.outputs.ver }}\"/" core.py
+          if ! git diff --quiet core.py; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore: release v${{ steps.v.outputs.ver }} [skip ci]"
+            git push
+          fi
+
+      - name: Build release files (runs the tests first)
+        shell: pwsh
+        env:
+          NOTES: ${{ steps.v.outputs.notes }}
+        run: ./release.ps1 -Notes $env:NOTES
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "v${{ steps.v.outputs.ver }}" dist/AT7-Monitor.zip dist/version.json
+          --title "AT7 Monitor ${{ steps.v.outputs.ver }}" --generate-notes --latest --target "$(git rev-parse HEAD)"

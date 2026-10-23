@@ -44,8 +44,14 @@ installs it and restarts the app. To turn update checks off, set `"update_url": 
 previous program files go to `previous`. To roll back: quit the app, copy a file from `backup` over `activity.db` (delete `activity.db-wal` and
 `activity.db-shm`), copy the files from `previous` back, and start the app again.
 
-**Maintainer:** bump `VERSION` in `core.py`, push, then run `.\release.ps1 -Notes "what changed"`. It runs the tests and builds
-`dist\AT7-Monitor.zip` and `dist\version.json`. On GitHub: Releases > Draft a new release > tag `v<VERSION>` > attach both files > Publish.
+**Maintainer (automatic):** every merge to `main` that changes the app files runs `.github/workflows/release.yml`: it picks the next version,
+writes it into `core.py` (committed as `chore: release vX.Y.Z [skip ci]`), runs the tests, builds the two release files and publishes the GitHub
+release. Version rule: a commit subject starting with `feat` bumps the minor number, `[major]` or `BREAKING` bumps the major number, anything
+else bumps the patch number. To choose a version yourself, edit `VERSION` in `core.py` before merging (an untagged version is released as is).
+Pull requests run the tests (`.github/workflows/test.yml`).
+
+**Maintainer (manual fallback):** run `.\release.ps1 -Notes "what changed"`, then on GitHub: Releases > Draft a new release > tag `v<VERSION>` >
+attach `dist\AT7-Monitor.zip` and `dist\version.json` > Publish.
 Any change to the database layout needs matching upgrade code in `init_db` (adding columns is safe; renaming or deleting is not).
 Protect the GitHub account that can publish: it controls what gets installed on colleagues' PCs.
 
