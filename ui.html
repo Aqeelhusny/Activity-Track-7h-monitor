@@ -142,11 +142,12 @@ async function checkUpdate() {
   let u; try { u = await (await fetch("/api/update")).json(); } catch { return; }
   const b = $("upd");
   if (u.busy) { b.hidden = false; b.replaceChildren(el("span", "", "Installing the update... the app restarts and this page reloads by itself.")); waitForRestart(u.current); return; }
-  if (!u.latest) { b.hidden = !u.error; if (u.error) b.replaceChildren(el("span", "mut", "Update failed: " + u.error)); return; }
+  if (!u.latest) { b.hidden = true; return; }  // a failed *check* (offline, no release yet) stays silent; only a failed install is shown
   const btn = el("button", "", "Update now");
   btn.onclick = async () => { btn.disabled = true; await fetch("/api/update/install", { method: "POST", headers: { "X-AT7": "1" } }); checkUpdate(); };
   b.hidden = false;
-  b.replaceChildren(el("b", "", `Update available: v${u.latest.version}`), el("span", "mut", `you have v${u.current}` + (u.latest.notes ? " · " + u.latest.notes : "")), btn);
+  b.replaceChildren(el("b", "", `Update available: v${u.latest.version}`), el("span", "mut", `you have v${u.current}` + (u.latest.notes ? " · " + u.latest.notes : "")), btn,
+    ...(u.install_error ? [el("span", "mut", "Last attempt failed: " + u.install_error)] : []));
 }
 function waitForRestart(old) {
   if (waiting) return; waiting = true;

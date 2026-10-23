@@ -6,7 +6,7 @@ DEFAULTS = {
     "goal_hours": 7,            # daily target, measured in ACTIVE time (real keyboard/mouse input)
     "active_window": 3,         # a second is active only if input happened within this many seconds; otherwise it is AFK
     "afk_log_seconds": 60,      # AFK stretches shorter than this still count as AFK time, but aren't listed as periods in the log/timeline
-    "update_url": "",           # https link to version.json; empty = no update checks
+    "update_url": "https://github.com/Aqeelhusny/Activity-Track-7h-monitor/releases/latest/download/version.json",  # "" = never check for updates
     "widget_compact": False,    # desktop widget minimised to one line
     "summary_time": "18:00",    # end-of-day summary notification
     "ignore_title_apps": ["KeePass", "1Password", "Bitwarden"],   # never store window titles of these apps

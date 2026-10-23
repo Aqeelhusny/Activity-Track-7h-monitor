@@ -190,7 +190,7 @@ def end_seg():
 
 
 # ---------- updates (needs update_url in config.json) ----------
-upd = {"latest": None, "checked": None, "error": None, "busy": False, "notified": None}
+upd = {"latest": None, "checked": None, "error": None, "install_error": None, "busy": False, "notified": None}
 
 
 def check_updates(manual=False):
@@ -217,14 +217,14 @@ def install_update():
     m = upd["latest"]
     if not m or upd["busy"]:
         return
-    upd["busy"] = True
+    upd.update(busy=True, install_error=None)
     try:
         log(f"UPDATE downloading v{m['version']}")
         folder = updater.fetch(m, tempfile.mkdtemp(prefix="at7-"))
         log(f"UPDATE installing v{m['version']} (the app restarts)")
         updater.apply(folder, HERE)  # install.ps1 stops this process, replaces the code (keeps data + config), restarts
     except Exception as e:
-        upd.update(error=str(e)[:200], busy=False)
+        upd.update(install_error=str(e)[:200], busy=False)
         crash("update")
 
 

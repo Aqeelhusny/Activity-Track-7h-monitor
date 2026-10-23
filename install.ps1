@@ -18,6 +18,17 @@ if (-not $py) {
 }
 if (-not $py) { throw "Python 3.9+ is required. Install it from https://www.python.org/downloads/ (tick 'Add to PATH') and run this again." }
 
+# upgrade case: snapshot the database BEFORE touching anything (sqlite's own backup, safe while the app runs). Keeps the last 5.
+if (Test-Path "$Dest\activity.db") {
+    $bk = "$Dest\backup"; New-Item -ItemType Directory -Force $bk | Out-Null
+    $oldVer = (Select-String "$Dest\core.py" -Pattern '^VERSION = "(.+)"' -ErrorAction SilentlyContinue).Matches.Groups[1].Value
+    $file = "$bk\activity-$(Get-Date -Format yyyyMMdd-HHmmss)-v$oldVer.db"
+    & $py -c "import sqlite3,sys; s=sqlite3.connect(sys.argv[1]); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()" "$Dest\activity.db" $file
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $file)) { throw "Database backup failed - update cancelled, nothing was changed." }
+    Get-ChildItem "$bk\activity-*.db" | Sort-Object LastWriteTime -Descending | Select-Object -Skip 5 | Remove-Item
+    Write-Host "Database backed up to $file"
+}
+
 # stop a running copy (upgrade case)
 Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" | Where-Object { $_.CommandLine -like "*$Dest*monitor.py*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 Start-Sleep 1
@@ -31,9 +42,12 @@ if ((Resolve-Path $src).Path -ne (Resolve-Path $Dest).Path) {
     foreach ($f in "monitor.py", "core.py", "updater.py", "ui.html", "requirements.txt", "README.md", "uninstall.ps1", "uninstall.bat", "test_core.py") {
         if (Test-Path "$src\$f") { Copy-Item "$src\$f" $Dest -Force }
     }
-    foreach ($f in Get-ChildItem "$src\activity.db*", "$src\config.json" -ErrorAction SilentlyContinue) {  # moving an existing install: bring its data along
-        if (-not (Test-Path "$Dest\$($f.Name)")) { Copy-Item $f.FullName $Dest }
+    # moving an existing install (e.g. from the project folder): bring its data along, but never over data already in $Dest
+    if ((Test-Path "$src\activity.db") -and -not (Test-Path "$Dest\activity.db")) {
+        & $py -c "import sqlite3,sys; s=sqlite3.connect(sys.argv[1]); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()" "$src\activity.db" "$Dest\activity.db"
+        if ($LASTEXITCODE -ne 0) { throw "Could not copy the existing database." }
     }
+    if ((Test-Path "$src\config.json") -and -not (Test-Path "$Dest\config.json")) { Copy-Item "$src\config.json" $Dest }
 }
 
 $venvPy = "$Dest\.venv\Scripts\pythonw.exe"

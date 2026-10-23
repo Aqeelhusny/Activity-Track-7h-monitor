@@ -25,7 +25,7 @@ The goal is measured in active time. A new day starts at 00:00. Pick 4-10h from 
 | active_window | 3 | seconds after an input that still count as active |
 | afk_log_seconds | 60 | shorter AFK stretches count in the total but aren't listed as periods |
 | summary_time | "18:00" | end-of-day summary notification |
-| update_url | "" | link to `version.json` (see Updates); empty = no update checks |
+| update_url | this repo's latest release | link to `version.json` (see Updates); set to "" to never check for updates |
 | widget_compact | false | desktop widget minimised to one line |
 | ignore_title_apps | KeePass, 1Password, Bitwarden | window titles never stored |
 | private_keywords | InPrivate, Incognito, Private Browsing | titles containing these are not stored |
@@ -36,11 +36,18 @@ The goal is measured in active time. A new day starts at 00:00. Pick 4-10h from 
 Dashboard: click the **Apps** / **Timeline** headings to fold or open them. Click an app or timeline block to open it (one at a time). Desktop widget: click the **-** in its corner to shrink it to one line, **+** to expand.
 
 ## Updates
-Set `update_url` in `config.json` to the link your maintainer gives you. The app checks it every 6 hours; when a newer version exists you
-get a notification, and the dashboard (and tray menu) shows **Update now**. One click downloads it, verifies its SHA-256, installs it and
-restarts the app. Your data and settings are kept, and the old version is saved in the `previous` folder (copy those files back to roll back).
+The app checks this project's latest GitHub release every 6 hours (the only network request it makes; it sends nothing about you). When a newer
+version exists you get a notification, and the dashboard (and tray menu) shows **Update now**. One click downloads it, verifies its SHA-256,
+installs it and restarts the app. To turn update checks off, set `"update_url": ""` in `config.json`.
 
-**Maintainer:** bump `VERSION` in `core.py`, then run
-`.\release.ps1 -BaseUrl https://<where-you-host-the-files> -Notes "what changed"`. It runs the tests and builds `dist\AT7-Monitor.zip`
-and `dist\version.json`; upload both to that folder. With GitHub Releases use `https://github.com/<org>/<repo>/releases/latest/download`.
-Colleagues' `update_url` is then `<BaseUrl>/version.json` (https only). Protect the account that can publish: it controls what gets installed.
+**Your data is safe across updates.** Before every update the installer snapshots `activity.db` into the `backup` folder (last 5 kept), and the
+previous program files go to `previous`. To roll back: quit the app, copy a file from `backup` over `activity.db` (delete `activity.db-wal` and
+`activity.db-shm`), copy the files from `previous` back, and start the app again.
+
+**Maintainer:** bump `VERSION` in `core.py`, push, then run `.\release.ps1 -Notes "what changed"`. It runs the tests and builds
+`dist\AT7-Monitor.zip` and `dist\version.json`. On GitHub: Releases > Draft a new release > tag `v<VERSION>` > attach both files > Publish.
+Any change to the database layout needs matching upgrade code in `init_db` (adding columns is safe; renaming or deleting is not).
+Protect the GitHub account that can publish: it controls what gets installed on colleagues' PCs.
+
+## License
+MIT, see [LICENSE](LICENSE).
