@@ -1,7 +1,7 @@
 """Pure tracking logic (no I/O) so it can be unit-tested: what one tick of the clock means for today's totals."""
 from datetime import datetime
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 DEFAULTS = {
     "goal_hours": 7,            # daily target, measured in ACTIVE time (real keyboard/mouse input)
     "active_window": 3,         # a second is active only if input happened within this many seconds; otherwise it is AFK
