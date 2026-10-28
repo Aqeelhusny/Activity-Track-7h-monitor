@@ -22,7 +22,7 @@ The goal is measured in active time. A new day starts at 00:00. Pick 4-10h from 
 | key | default | meaning |
 |---|---|---|
 | goal_hours | 7 | daily target |
-| active_window | 3 | seconds after an input that still count as active |
+| active_window | 3 | seconds after an input that still count as active, i.e. you are AFK after this long without input. Pick 3 sec or 1-5 min from the tray menu (Count as AFK after) |
 | afk_log_seconds | 60 | shorter AFK stretches count in the total but aren't listed as periods |
 | summary_time | "18:00" | end-of-day summary notification |
 | update_url | this repo's latest release | link to `version.json` (see Updates); set to "" to never check for updates |

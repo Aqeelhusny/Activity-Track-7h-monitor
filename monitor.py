@@ -32,6 +32,10 @@ def load_cfg():
         c["goal_hours"] = min(max(float(c["goal_hours"]), 0.1), 24)
     except (TypeError, ValueError):
         c["goal_hours"] = DEFAULTS["goal_hours"]
+    try:
+        c["active_window"] = min(max(float(c["active_window"]), 1), 3600)
+    except (TypeError, ValueError):
+        c["active_window"] = DEFAULTS["active_window"]
     return c
 
 
@@ -356,6 +360,11 @@ def set_goal(h):
     save_cfg()
 
 
+def set_afk(sec):
+    cfg["active_window"] = sec
+    save_cfg()
+
+
 def toggle_compact():
     cfg["widget_compact"] = not cfg["widget_compact"]
     save_cfg()
@@ -366,6 +375,7 @@ tog.bind("<Button-1>", lambda e: toggle_compact())
 
 dashboard = lambda: webbrowser.open(f"http://127.0.0.1:{PORT}")
 goal_item = lambda h: pystray.MenuItem(f"{h}h", lambda icon, item: set_goal(h), checked=lambda item: cfg["goal_hours"] == h, radio=True)
+afk_item = lambda sec, label: pystray.MenuItem(label, lambda icon, item: set_afk(sec), checked=lambda item: cfg["active_window"] == sec, radio=True)
 menu = pystray.Menu(
     pystray.MenuItem(f"AT7 Monitor v{VERSION}", None, enabled=False),
     pystray.MenuItem("Dashboard", dashboard, default=True),
@@ -373,6 +383,7 @@ menu = pystray.Menu(
     pystray.MenuItem("Check for updates", lambda: async_(check_updates, True)),
     pystray.MenuItem("Minimise / expand widget", toggle_compact),
     pystray.MenuItem("Daily goal", pystray.Menu(*(goal_item(h) for h in (4, 5, 6, 7, 8, 9, 10)))),
+    pystray.MenuItem("Count as AFK after", pystray.Menu(afk_item(3, "3 sec (strict)"), *(afk_item(m * 60, f"{m} min") for m in range(1, 6)))),
     pystray.MenuItem("Edit config (any goal)", lambda: os.startfile(CFG_FILE)),
     pystray.MenuItem("Open log", lambda: os.startfile(LOG)),
     pystray.MenuItem("Quit", lambda: root.after(0, quit_)))
